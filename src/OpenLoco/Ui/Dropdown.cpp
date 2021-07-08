@@ -47,51 +47,22 @@ namespace OpenLoco::Ui::Dropdown
 
     void add(size_t index, string_id title)
     {
-        assert(index < std::numeric_limits<uint8_t>::max());
-
         _dropdownItemFormats[index] = title;
     }
 
     void add(size_t index, string_id title, std::initializer_list<format_arg> l)
     {
-        assert(index < std::numeric_limits<uint8_t>::max());
-
-        _dropdownItemFormats[index] = title;
+        add(index, title);
 
         std::byte* args = _dropdownItemArgs[index];
 
         for (auto arg : l)
         {
-            switch (arg.type)
-            {
-                case format_arg_type::u16:
-                {
-                    uint16_t* ptr = (uint16_t*)args;
-                    *ptr = arg.u16;
-                    args += 2;
-                    break;
-                }
-
-                case format_arg_type::u32:
-                {
-                    uint32_t* ptr = (uint32_t*)args;
-                    *ptr = arg.u32;
-                    args += 4;
-                    break;
-                }
-
-                case format_arg_type::ptr:
-                {
-                    uintptr_t* ptr = (uintptr_t*)args;
-                    *ptr = arg.ptr;
-                    args += 4;
-                    break;
-                }
-
-                default:
-                    Console::error("Unknown format: %d", arg.type);
-                    break;
-            }
+            std::visit([&args](auto value) {
+                *reinterpret_cast<decltype(value)*>(args) = value;
+                args += sizeof value;
+            },
+                       arg);
         }
     }
 
@@ -113,9 +84,7 @@ namespace OpenLoco::Ui::Dropdown
 
     void add(size_t index, string_id title, format_arg l)
     {
-        assert(index < std::numeric_limits<uint8_t>::max());
-
-        add(static_cast<uint8_t>(index), title, { l });
+        add(index, title, { l });
     }
 
     int16_t getHighlightedItem()

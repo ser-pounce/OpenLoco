@@ -3,57 +3,15 @@
 #include "../Localisation/StringManager.h"
 #include "../Window.h"
 #include <cstdlib>
+#include <variant>
 #include <vector>
 
-enum format_arg_type
-{
-    u16,
-    u32,
-    ptr,
-};
-
-struct format_arg
-{
-    format_arg_type type;
-    union
-    {
-        uint16_t u16;
-        uint32_t u32;
-        uintptr_t ptr;
-    };
-
-    format_arg(uint16_t value)
-    {
-        type = format_arg_type::u16;
-        u16 = value;
-    }
-
-    format_arg(uint32_t value)
-    {
-        type = format_arg_type::u32;
-        u32 = value;
-    }
-
-    format_arg(char* value)
-    {
-        type = format_arg_type::ptr;
-        ptr = (uintptr_t)value;
-    }
-
-    format_arg(const char* value)
-    {
-        type = format_arg_type::ptr;
-        ptr = (uintptr_t)value;
-    }
-};
-
-namespace OpenLoco
-{
-    class FormatArguments;
-}
+class OpenLoco::FormatArguments;
 
 namespace OpenLoco::Ui::Dropdown
 {
+    using format_arg = std::variant<uint16_t, uint32_t, char const*>;
+
     void add(size_t index, string_id title);
     void add(size_t index, string_id title, std::initializer_list<format_arg> l);
     void add(size_t index, string_id title, format_arg l);
