@@ -81,17 +81,17 @@ namespace OpenLoco::Ui::Dropdown
     void add(Index index, string_id title, FormatArguments& fArgs)
     {
         add(index, title);
-        std::byte* args = _dropdownItemArgs[index];
 
-        int32_t copyLength = std::min(fArgs.getLength(), sizeof(_dropdownItemArgs[index]));
+        auto argsLength = static_cast<uint8_t>(fArgs.getLength());
+        assert(argsLength <= 2 * bytes_per_item);
 
-        memcpy(args, &fArgs, copyLength);
-        copyLength = std::min(fArgs.getLength() - sizeof(_dropdownItemArgs[index]), sizeof(_dropdownItemArgs2[index]));
-        if (copyLength > 0)
-        {
-            args = _dropdownItemArgs2[index];
-            memcpy(args, reinterpret_cast<const std::byte*>(&fArgs) + sizeof(_dropdownItemArgs[index]), copyLength);
-        }
+        auto start = static_cast<std::byte const*>(&fArgs);
+        auto end   = start + std::min(argsLength, bytes_per_item);
+        std::copy(start, end, _dropdownItemArgs[index]);
+
+        start += bytes_per_item;
+        end = start + std::max(static_cast<int>(argsLength) - bytes_per_item, 0);
+        std::copy(start, end, _dropdownItemArgs2[index]);
     }
 
     void add(Index index, string_id title, format_arg l)
