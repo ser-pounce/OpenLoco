@@ -12,11 +12,21 @@ namespace OpenLoco::Ui::Dropdown
 {
     using format_arg = std::variant<uint16_t, uint32_t, char const*>;
 
-    void add(size_t index, string_id title);
-    void add(size_t index, string_id title, std::initializer_list<format_arg> l);
-    void add(size_t index, string_id title, format_arg l);
-    void add(size_t index, string_id title, FormatArguments& fArgs);
-    int16_t getHighlightedItem();
+    class Index
+    {
+    public:
+        Index(size_t);
+        operator size_t() const;
+
+    private:
+        uint8_t _index;
+    };
+
+    void add(Index index, string_id title);
+    void add(Index index, string_id title, std::initializer_list<format_arg> l);
+    void add(Index index, string_id title, format_arg l);
+    void add(Index index, string_id title, FormatArguments& fArgs);
+
     void setItemDisabled(size_t index);
     void setHighlightedItem(size_t index);
     void setItemSelected(size_t index);
@@ -33,7 +43,9 @@ namespace OpenLoco::Ui::Dropdown
     void showColour(const Window* window, const Widget* widget, uint32_t availableColours, Colour_t selectedColour, Colour_t dropdownColour);
 
     void populateCompanySelect(Window* window, Widget* widget);
+
+    int16_t getHighlightedItem();
     CompanyId_t getCompanyIdFromSelection(int16_t itemIndex);
-    uint16_t getItemArgument(const uint8_t index, const uint8_t argument);
+    uint16_t getItemArgument(Index index, uint8_t argument);
     uint16_t getItemsPerRow(uint8_t itemCount);
 }

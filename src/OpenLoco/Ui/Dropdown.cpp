@@ -19,7 +19,19 @@ using namespace OpenLoco::Interop;
 
 namespace OpenLoco::Ui::Dropdown
 {
-    static constexpr int bytes_per_item = 8;
+    static constexpr uint8_t bytes_per_item = 8;
+    static constexpr uint8_t max_items = 40;
+
+    Index::Index(size_t index)
+        : _index{ static_cast<uint8_t>(index) }
+    {
+        assert(_index <= max_items);
+    }
+
+    Index::operator size_t() const
+    {
+        return _index;
+    }
 
     static loco_global<uint8_t[31], 0x005045FA> _byte_5045FA;
     static loco_global<uint8_t[31], 0x00504619> _byte_504619;
@@ -40,33 +52,33 @@ namespace OpenLoco::Ui::Dropdown
     static loco_global<uint16_t, 0x0113DC78> _word_113DC78;
     static loco_global<int16_t, 0x0113D84E> _dropdownHighlightedIndex;
     static loco_global<uint32_t, 0x0113DC64> _dropdownSelection;
-    static loco_global<string_id[40], 0x0113D850> _dropdownItemFormats;
-    static loco_global<std::byte[40][bytes_per_item], 0x0113D8A0> _dropdownItemArgs;
-    static loco_global<std::byte[40][bytes_per_item], 0x0113D9E0> _dropdownItemArgs2;
-    static loco_global<uint8_t[40], 0x00113DB20> _menuOptions;
+    static loco_global<string_id[max_items], 0x0113D850> _dropdownItemFormats;
+    static loco_global<std::byte[max_items][bytes_per_item], 0x0113D8A0> _dropdownItemArgs;
+    static loco_global<std::byte[max_items][bytes_per_item], 0x0113D9E0> _dropdownItemArgs2;
+    static loco_global<uint8_t[max_items], 0x00113DB20> _menuOptions;
 
-    void add(size_t index, string_id title)
+    void add(Index index, string_id title)
     {
         _dropdownItemFormats[index] = title;
     }
 
-    void add(size_t index, string_id title, std::initializer_list<format_arg> l)
+    void add(Index index, string_id title, std::initializer_list<format_arg> l)
     {
         add(index, title);
 
-        std::byte* args = _dropdownItemArgs[index];
+        auto dest = _dropdownItemArgs[index];
 
         for (auto arg : l)
         {
-            std::visit([&args](auto value) {
-                *reinterpret_cast<decltype(value)*>(args) = value;
-                args += sizeof value;
-            },
-                       arg);
+            std::visit([index, &dest](auto value) {
+                assert(dest + sizeof value <= _dropdownItemArgs[index + 1]);
+                auto src = reinterpret_cast<std::byte const*>(&value);
+                dest = std::copy(src, src + sizeof value, dest);
+            }, arg);
         }
     }
 
-    void add(size_t index, string_id title, FormatArguments& fArgs)
+    void add(Index index, string_id title, FormatArguments& fArgs)
     {
         add(index, title);
         std::byte* args = _dropdownItemArgs[index];
@@ -82,7 +94,7 @@ namespace OpenLoco::Ui::Dropdown
         }
     }
 
-    void add(size_t index, string_id title, format_arg l)
+    void add(Index index, string_id title, format_arg l)
     {
         add(index, title, { l });
     }
@@ -887,7 +899,7 @@ namespace OpenLoco::Ui::Dropdown
         return companyId;
     }
 
-    uint16_t getItemArgument(const uint8_t index, const uint8_t argument)
+    uint16_t getItemArgument(Index index, uint8_t argument)
     {
         return reinterpret_cast<uint16_t*>(_dropdownItemArgs[index])[argument];
     }
