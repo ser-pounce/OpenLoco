@@ -113,15 +113,13 @@ int16_t Dropdown::getHighlightedItem()
 void Dropdown::setItemDisabled(size_t index)
 {
     assert(index < CHAR_BIT * sizeof _dropdownDisabledItems);
-
     _dropdownDisabledItems |= (1U << index);
 }
 
 void Dropdown::setHighlightedItem(size_t index)
 {
     assert(index < max_items);
-
-    _dropdownHighlightedIndex = static_cast<uint8_t>(index);
+    _dropdownHighlightedIndex = index;
 }
 
 void Dropdown::clearHighlightedItem()
@@ -131,9 +129,8 @@ void Dropdown::clearHighlightedItem()
 
 void Dropdown::setItemSelected(size_t index)
 {
-    assert(index < std::numeric_limits<uint8_t>::max());
-
-    _dropdownSelection |= (1U << static_cast<uint8_t>(index));
+    assert(index < CHAR_BIT * sizeof _dropdownSelection);
+    _dropdownSelection |= (1U << index);
 }
 
 namespace
