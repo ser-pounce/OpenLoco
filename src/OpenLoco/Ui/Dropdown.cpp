@@ -150,10 +150,8 @@ namespace
 
     void dropdownFormatArgsToFormatArgs(uint8_t itemIndex, OL::FormatArguments& args)
     {
-        args.push(*reinterpret_cast<uint32_t*>(&_dropdownItemArgs[itemIndex][0]));
-        args.push(*reinterpret_cast<uint32_t*>(&_dropdownItemArgs[itemIndex][4]));
-        args.push(*reinterpret_cast<uint32_t*>(&_dropdownItemArgs2[itemIndex][0]));
-        args.push(*reinterpret_cast<uint32_t*>(&_dropdownItemArgs2[itemIndex][4]));
+        args.pushBytes(_dropdownItemArgs[itemIndex], std::end(_dropdownItemArgs[itemIndex]));
+        args.pushBytes(_dropdownItemArgs2[itemIndex], std::end(_dropdownItemArgs2[itemIndex]));
     }
 
     // 0x00494BF6
