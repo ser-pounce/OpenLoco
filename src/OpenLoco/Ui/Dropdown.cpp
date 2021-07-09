@@ -34,7 +34,7 @@ namespace
     loco_global<Ui::WindowNumber_t, 0x00523370> _pressedWindowNumber;
     loco_global<int32_t, 0x00523372> _pressedWidgetIndex;
     loco_global<int16_t, 0x112C876> _currentFontSpriteBase;
-    loco_global<char[512], 0x0112CC04> _byte_112CC04;
+    loco_global<char[512], 0x0112CC04> _textBuffer;
     loco_global<uint8_t, 0x01136F94> _windowDropdownOnpaintCellX;
     loco_global<uint8_t, 0x01136F96> _windowDropdownOnpaintCellY;
     loco_global<uint16_t, 0x0113D84C> _dropdownItemCount;
@@ -155,17 +155,17 @@ namespace
     }
 
     // 0x00494BF6
-    void sub_494BF6(Ui::Window* self, Gfx::Context* context, OL::string_id stringId, int16_t x, int16_t y, int16_t width, OL::Colour_t colour, OL::FormatArguments args)
+    void drawString(Gfx::Context* context, OL::string_id stringId, int16_t x, int16_t y, int16_t width, OL::Colour_t colour, OL::FormatArguments args)
     {
-        OL::StringManager::formatString(_byte_112CC04, stringId, &args);
+        OL::StringManager::formatString(_textBuffer, stringId, &args);
 
         _currentFontSpriteBase = OL::Font::medium_bold;
 
-        Gfx::clipString(width, _byte_112CC04);
+        Gfx::clipString(width, _textBuffer);
 
         _currentFontSpriteBase = OL::Font::m1;
 
-        Gfx::drawString(context, x, y, colour, _byte_112CC04);
+        Gfx::drawString(context, x, y, colour, _textBuffer);
     }
 
     // 0x004CD00E
@@ -222,7 +222,7 @@ namespace
                         auto x = _windowDropdownOnpaintCellX * _dropdownItemWidth + self->x + 2;
                         auto y = _windowDropdownOnpaintCellY * _dropdownItemHeight + self->y + 1;
                         auto width = self->width - 5;
-                        sub_494BF6(self, context, dropdownItemFormat, x, y, width, colour, args);
+                        drawString(context, dropdownItemFormat, x, y, width, colour, args);
                     }
                 }
 
@@ -348,11 +348,11 @@ namespace
 
             dropdownFormatArgsToFormatArgs(itemCount, args);
 
-            OL::StringManager::formatString(_byte_112CC04, _dropdownItemFormats[itemCount], &args);
+            OL::StringManager::formatString(_textBuffer, _dropdownItemFormats[itemCount], &args);
 
             _currentFontSpriteBase = OL::Font::medium_bold;
 
-            auto stringWidth = getStringWidth(_byte_112CC04);
+            auto stringWidth = getStringWidth(_textBuffer);
 
             maxStringWidth = std::max(maxStringWidth, stringWidth);
         }
