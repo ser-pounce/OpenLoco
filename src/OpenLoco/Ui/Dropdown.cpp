@@ -147,10 +147,14 @@ namespace
         self->invalidate();
     }
 
-    void dropdownFormatArgsToFormatArgs(uint8_t itemIndex, OL::FormatArguments& args)
+    OL::FormatArguments dropdownFormatArgsToFormatArgs(uint8_t itemIndex)
     {
+        auto args = OL::FormatArguments();
+
         args.pushBytes(_dropdownItemArgs[itemIndex], std::end(_dropdownItemArgs[itemIndex]));
         args.pushBytes(_dropdownItemArgs2[itemIndex], std::end(_dropdownItemArgs2[itemIndex]));
+
+        return args;
     }
 
     // 0x00494BF6
@@ -185,9 +189,7 @@ namespace
                     Gfx::drawRect(context, x, y, _dropdownItemWidth, _dropdownItemHeight, (1 << 25) | OL::PaletteIndex::index_2E);
                 }
 
-                auto args = OL::FormatArguments();
-
-                dropdownFormatArgsToFormatArgs(itemCount, args);
+                auto args = dropdownFormatArgsToFormatArgs(itemCount);
 
                 auto dropdownItemFormat = _dropdownItemFormats[itemCount];
 
@@ -343,9 +345,7 @@ namespace
         uint16_t maxStringWidth = 0;
         for (uint8_t itemCount = 0; itemCount < count; itemCount++)
         {
-            auto args = OL::FormatArguments();
-
-            dropdownFormatArgsToFormatArgs(itemCount, args);
+            auto args = dropdownFormatArgsToFormatArgs(itemCount);
 
             OL::StringManager::formatString(_textBuffer, _dropdownItemFormats[itemCount], &args);
 
