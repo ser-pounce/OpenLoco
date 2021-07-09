@@ -119,7 +119,7 @@ void Dropdown::setItemDisabled(size_t index)
 void Dropdown::setHighlightedItem(size_t index)
 {
     assert(index < max_items);
-    _dropdownHighlightedIndex = index;
+    _dropdownHighlightedIndex = static_cast<int16_t>(index);
 }
 
 void Dropdown::clearHighlightedItem()
@@ -148,7 +148,7 @@ namespace
         self->invalidate();
     }
 
-    void dropdownFormatArgsToFormatArgs(uint8_t itemIndex, OL::FormatArguments args)
+    void dropdownFormatArgsToFormatArgs(uint8_t itemIndex, OL::FormatArguments& args)
     {
         args.push(*reinterpret_cast<uint32_t*>(&_dropdownItemArgs[itemIndex][0]));
         args.push(*reinterpret_cast<uint32_t*>(&_dropdownItemArgs[itemIndex][4]));
