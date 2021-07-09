@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../Interop/Interop.hpp"
+#include <cassert>
 
 using namespace OpenLoco::Interop;
 
@@ -56,14 +57,23 @@ namespace OpenLoco
             _buffer = nextOffset;
         }
 
+        void pushBytes(std::byte const* start, std::byte const* end)
+        {
+            auto len = end - start;
+            assert(len % 2 == 0);
+            
+            auto nextOffset = getNextOffset(len);
+
+            std::copy(start, end, _buffer);
+            _buffer = nextOffset;
+        }
+
         template<typename T>
         void push(T arg)
         {
             static_assert(sizeof(T) % 2 == 0, "Tried to push an odd number of bytes onto the format args!");
-            auto* nextOffset = getNextOffset(sizeof(T));
-
-            *(T*)_buffer = arg;
-            _buffer = nextOffset;
+            auto start = reinterpret_cast<std::byte const*>(&arg);
+            pushBytes(start, start + sizeof arg);
         }
 
         const void* operator&()
