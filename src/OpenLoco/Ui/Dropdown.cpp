@@ -19,13 +19,13 @@ using namespace OpenLoco::Interop;
 
 namespace
 {
-    namespace OL = OpenLoco;
-    namespace Gfx = OL::Gfx;
-    namespace Ui = OL::Ui;
+    namespace OL       = OpenLoco;
+    namespace Gfx      = OL::Gfx;
+    namespace Ui       = OL::Ui;
     namespace Dropdown = Ui::Dropdown;
 
     constexpr uint8_t bytes_per_item = 8;
-    constexpr uint8_t max_items = 40;
+    constexpr uint8_t max_items      = 40;
 
     loco_global<uint8_t[31], 0x005045FA> _byte_5045FA;
     loco_global<uint8_t[31], 0x00504619> _byte_504619;
@@ -112,7 +112,7 @@ int16_t Dropdown::getHighlightedItem()
 
 void Dropdown::setItemDisabled(size_t index)
 {
-    assert(index < CHAR_BIT * sizeof _dropdownDisabledItems);
+    assert(index < CHAR_BIT * sizeof(uint32_t));
     _dropdownDisabledItems |= (1U << index);
 }
 
@@ -129,7 +129,7 @@ void Dropdown::clearHighlightedItem()
 
 void Dropdown::setItemSelected(size_t index)
 {
-    assert(index < CHAR_BIT * sizeof _dropdownSelection);
+    assert(index < CHAR_BIT * sizeof(uint32_t));
     _dropdownSelection |= (1U << index);
 }
 
