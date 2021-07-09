@@ -55,7 +55,7 @@ namespace
 Dropdown::Index::Index(size_t index)
     : _index{ static_cast<uint8_t>(index) }
 {
-    assert(_index <= max_items);
+    assert(_index < max_items);
 }
 
 Dropdown::Index::operator size_t() const
@@ -96,7 +96,7 @@ void Dropdown::add(Index index, string_id title, FormatArguments& fArgs)
     std::copy(start, end, _dropdownItemArgs[index]);
 
     start += bytes_per_item;
-    end = start + std::max(static_cast<int>(argsLength) - bytes_per_item, 0);
+    end    = start + std::max(static_cast<int>(argsLength) - bytes_per_item, 0);
     std::copy(start, end, _dropdownItemArgs2[index]);
 }
 
@@ -112,17 +112,21 @@ int16_t Dropdown::getHighlightedItem()
 
 void Dropdown::setItemDisabled(size_t index)
 {
-    assert(index < std::numeric_limits<uint8_t>::max());
+    assert(index < CHAR_BIT * sizeof _dropdownDisabledItems);
 
-    _dropdownDisabledItems |= (1U << static_cast<uint8_t>(index));
+    _dropdownDisabledItems |= (1U << index);
 }
 
 void Dropdown::setHighlightedItem(size_t index)
 {
-    // Ensure that a valid item index is passed, or -1 to disable.
-    assert(index < std::numeric_limits<uint8_t>::max() || index == std::numeric_limits<size_t>::max());
+    assert(index < max_items);
 
     _dropdownHighlightedIndex = static_cast<uint8_t>(index);
+}
+
+void Dropdown::clearHighlightedItem()
+{
+    _dropdownHighlightedIndex = -1;
 }
 
 void Dropdown::setItemSelected(size_t index)
@@ -864,6 +868,9 @@ void Dropdown::populateCompanySelect(Window* window, Widget* widget)
 
     showText(x, y, widget->width(), widget->height(), 25, colour, index, (1 << 6));
 
+    
+    _word_113DC78 = _word_113DC78 | (1 << 1);
+
     size_t highlightedIndex = 0;
 
     while (window->owner != _menuOptions[highlightedIndex])
@@ -872,13 +879,12 @@ void Dropdown::populateCompanySelect(Window* window, Widget* widget)
 
         if (highlightedIndex > CompanyManager::max_companies)
         {
-            highlightedIndex = -1;
-            break;
+            clearHighlightedItem();
+            return;
         }
     }
 
     setHighlightedItem(highlightedIndex);
-    _word_113DC78 = _word_113DC78 | (1 << 1);
 }
 
 // 0x004CF284

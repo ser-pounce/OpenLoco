@@ -29,6 +29,7 @@ namespace OpenLoco::Ui::Dropdown
 
     void setItemDisabled(size_t index);
     void setHighlightedItem(size_t index);
+    void clearHighlightedItem();
     void setItemSelected(size_t index);
 
     void show(int16_t x, int16_t y, int16_t width, int16_t height, Colour_t colour, size_t count, uint8_t itemHeight, uint8_t flags);
