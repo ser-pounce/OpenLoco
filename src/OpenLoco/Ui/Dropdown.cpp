@@ -92,12 +92,11 @@ void Dropdown::add(Index index, string_id title, FormatArguments& fArgs)
     assert(argsLength <= 2 * bytes_per_item);
 
     auto start = static_cast<std::byte const*>(&fArgs);
-    auto end   = start + std::min(argsLength, bytes_per_item);
-    std::copy(start, end, _dropdownItemArgs[index]);
+    auto mid   = start + std::min(argsLength, bytes_per_item);
+    auto end   = mid   + std::max(static_cast<int>(argsLength) - bytes_per_item, 0);
 
-    start += bytes_per_item;
-    end    = start + std::max(static_cast<int>(argsLength) - bytes_per_item, 0);
-    std::copy(start, end, _dropdownItemArgs2[index]);
+    std::copy(start, mid, _dropdownItemArgs[index]);
+    std::copy(mid, end, _dropdownItemArgs2[index]);
 }
 
 void Dropdown::add(Index index, string_id title, format_arg l)
