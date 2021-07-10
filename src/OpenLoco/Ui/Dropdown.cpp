@@ -164,14 +164,19 @@ namespace
         return args;
     }
 
-    auto getPrimaryColour(Ui::Window const* self)
+    OL::Colour_t getPrimaryColour(Ui::Window const* self)
     {
         return self->getColour(Ui::WindowColour::primary);
     }
 
+    bool isTranslucent(OL::Colour_t colour)
+    {
+        return colour & OL::Colour::translucent_flag;
+    }
+
     bool isTranslucent(Ui::Window const* self)
     {
-        return getPrimaryColour(self) & OL::Colour::translucent_flag;
+        return isTranslucent(getPrimaryColour(self));
     }
 
     auto getShadeFromPrimary(Ui::Window const* self, uint8_t shade)
@@ -199,6 +204,7 @@ namespace
         }
     }
 
+    //TODO Replace with Gfx::point_t?
     auto getCellCoords(Ui::Window const* self)
     {
         return std::make_pair(
@@ -228,10 +234,20 @@ namespace
             && _dropdownItemFormats[index] != OL::StringIds::null;
     }
 
+    void enableAllItems()
+    {
+        _dropdownDisabledItems = 0;
+    }
+
     bool isDisabled(size_t index)
     {
         assert(index < CHAR_BIT * sizeof(uint32_t));
         return _dropdownDisabledItems & (1U << index);
+    }
+
+    void deselectAllItems()
+    {
+        _dropdownSelection = 0;
     }
 
     void drawHighlightedBackground(Ui::Window const* self, Gfx::Context* context)
@@ -364,32 +380,44 @@ namespace
         }
     }
 
-    static void initEvents()
+    void initEvents()
     {
         events.on_update = onUpdate;
         events.draw = draw;
     }
 
-    // 0x004CCF1E
-    static void open(Gfx::point_t origin, Gfx::ui_size_t size, OL::Colour_t colour)
+    void setTransparent(Ui::Window* window)
+    {
+        window->flags |= Ui::WindowFlags::transparent;
+    }
+
+    void createWindow(Gfx::point_t origin, Gfx::ui_size_t size, OL::Colour_t colour)
     {
         auto window = Ui::WindowManager::createWindow(Ui::WindowType::dropdown, origin, size, Ui::WindowFlags::stick_to_front, &events);
 
+        window->setColour(Ui::WindowColour::primary, colour);
         window->widgets = widgets;
 
-        if (colour & OL::Colour::translucent_flag)
+        if (isTranslucent(colour))
         {
-            window->flags |= Ui::WindowFlags::transparent;
+            setTransparent(window);
         }
+    }
 
-        initEvents();
+    void resetDropdown()
+    {
+        Dropdown::clearHighlightedItem();
+        enableAllItems();
+        deselectAllItems();
+    }
 
+    // 0x004CCF1E
+    void open(Gfx::point_t origin, Gfx::ui_size_t size, OL::Colour_t colour)
+    {
         widgets[0].windowColour = Ui::WindowColour::primary;
-        window->setColour(Ui::WindowColour::primary, colour);
-
-        _dropdownHighlightedIndex = -1;
-        _dropdownDisabledItems = 0;
-        _dropdownSelection = 0;
+        initEvents();
+        resetDropdown();
+        createWindow(origin, size, colour);
         OL::Input::state(OL::Input::State::dropdownActive);
     }
 
