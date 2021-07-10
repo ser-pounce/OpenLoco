@@ -15,8 +15,9 @@ namespace OpenLoco::Ui::Dropdown
     class Index
     {
     public:
-        Index(size_t index);
+        Index(size_t index = 0);
         operator size_t() const;
+        Index& operator++();
 
     private:
         uint8_t _index;
@@ -28,6 +29,7 @@ namespace OpenLoco::Ui::Dropdown
     void add(Index index, string_id title, FormatArguments& fArgs);
 
     void setItemDisabled(size_t index);
+    int16_t getHighlightedItem();
     void setHighlightedItem(size_t index);
     void clearHighlightedItem();
     void setItemSelected(size_t index);
@@ -45,7 +47,6 @@ namespace OpenLoco::Ui::Dropdown
 
     void populateCompanySelect(Window* window, Widget* widget);
 
-    int16_t getHighlightedItem();
     CompanyId_t getCompanyIdFromSelection(int16_t itemIndex);
     uint16_t getItemArgument(Index index, uint8_t argument);
     uint16_t getItemsPerRow(uint8_t itemCount);

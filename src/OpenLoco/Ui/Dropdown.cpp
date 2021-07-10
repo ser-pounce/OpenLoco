@@ -27,7 +27,7 @@ namespace
     constexpr uint8_t bytes_per_item = 8;
     constexpr uint8_t max_items      = 40;
 
-    loco_global<uint8_t[31], 0x005045FA> _byte_5045FA;
+    loco_global<uint8_t[31], 0x005045FA> _colourMap;
     loco_global<uint8_t[31], 0x00504619> _byte_504619;
     loco_global<std::uint8_t[33], 0x005046FA> _appropriateImageDropdownItemsPerRow;
     loco_global<Ui::WindowType, 0x0052336F> _pressedWindowType;
@@ -46,7 +46,7 @@ namespace
     loco_global<uint16_t, 0x0113DC78> _word_113DC78;
     loco_global<int16_t, 0x0113D84E> _dropdownHighlightedIndex;
     loco_global<uint32_t, 0x0113DC64> _dropdownSelection;
-    loco_global<OL::string_id[max_items], 0x0113D850> _dropdownItemFormats;
+    loco_global<OL::string_id[max_items], 0x0113D850> _dropdownItemTextIds;
     loco_global<std::byte[max_items][bytes_per_item], 0x0113D8A0> _dropdownItemArgs;
     loco_global<std::byte[max_items][bytes_per_item], 0x0113D9E0> _dropdownItemArgs2;
     loco_global<uint8_t[max_items], 0x00113DB20> _menuOptions;
@@ -63,9 +63,16 @@ Dropdown::Index::operator size_t() const
     return _index;
 }
 
+Dropdown::Index& Dropdown::Index::operator++()
+{
+    ++_index;
+    assert(_index < max_items);
+    return *this;
+}
+
 void Dropdown::add(Index index, string_id title)
 {
-    _dropdownItemFormats[index] = title;
+    _dropdownItemTextIds[index] = title;
 }
 
 void Dropdown::add(Index index, string_id title, std::initializer_list<format_arg> l)
@@ -104,15 +111,15 @@ void Dropdown::add(Index index, string_id title, format_arg l)
     add(index, title, { l });
 }
 
-int16_t Dropdown::getHighlightedItem()
-{
-    return _dropdownHighlightedIndex;
-}
-
 void Dropdown::setItemDisabled(size_t index)
 {
     assert(index < CHAR_BIT * sizeof(uint32_t));
     _dropdownDisabledItems |= (1U << index);
+}
+
+int16_t Dropdown::getHighlightedItem()
+{
+    return _dropdownHighlightedIndex;
 }
 
 void Dropdown::setHighlightedItem(size_t index)
@@ -147,125 +154,198 @@ namespace
         self->invalidate();
     }
 
-    OL::FormatArguments dropdownFormatArgsToFormatArgs(uint8_t itemIndex)
+    OL::FormatArguments getFormatArgs(Dropdown::Index index)
     {
         auto args = OL::FormatArguments();
 
-        args.pushBytes(_dropdownItemArgs[itemIndex], std::end(_dropdownItemArgs[itemIndex]));
-        args.pushBytes(_dropdownItemArgs2[itemIndex], std::end(_dropdownItemArgs2[itemIndex]));
+        args.pushBytes(_dropdownItemArgs[index], std::end(_dropdownItemArgs[index]));
+        args.pushBytes(_dropdownItemArgs2[index], std::end(_dropdownItemArgs2[index]));
 
         return args;
     }
 
-    // 0x00494BF6
-    void drawString(Gfx::Context* context, OL::string_id stringId, int16_t x, int16_t y, int16_t width, OL::Colour_t colour, OL::FormatArguments args)
+    auto getPrimaryColour(Ui::Window const* self)
     {
+        return self->getColour(Ui::WindowColour::primary);
+    }
+
+    bool isTranslucent(Ui::Window const* self)
+    {
+        return getPrimaryColour(self) & OL::Colour::translucent_flag;
+    }
+
+    auto getShadeFromPrimary(Ui::Window const* self, uint8_t shade)
+    {
+        return OL::Colour::getShade(getPrimaryColour(self), shade);
+    }
+
+    auto getOpaqueFromPrimary(Ui::Window const* self)
+    {
+        return OL::Colour::opaque(getPrimaryColour(self));
+    }
+
+    void resetCellPosition()
+    {
+        _windowDropdownOnpaintCellX = 0;
+        _windowDropdownOnpaintCellY = 0;
+    }
+
+    void advanceCellPosition()
+    {
+        if (++_windowDropdownOnpaintCellX == _dropdownColumnCount)
+        {
+            _windowDropdownOnpaintCellX = 0;
+            ++_windowDropdownOnpaintCellY;
+        }
+    }
+
+    auto getCellCoords(Ui::Window const* self)
+    {
+        return std::make_pair(
+            _windowDropdownOnpaintCellX * _dropdownItemWidth  + self->x,
+            _windowDropdownOnpaintCellY * _dropdownItemHeight + self->y);
+    }
+
+    bool isHighlighted(Dropdown::Index index)
+    {
+        return index == static_cast<size_t>(Dropdown::getHighlightedItem());
+    }
+
+    bool empty(Dropdown::Index index)
+    {
+        return _dropdownItemTextIds[index] == OL::StringIds::empty;
+    }
+
+    bool isText(Dropdown::Index index)
+    {
+        return _dropdownItemTextIds[index] != static_cast<OL::string_id>(-2)
+            && _dropdownItemTextIds[index] != OL::StringIds::null;
+    }
+
+    bool isDisabled(size_t index)
+    {
+        assert(index < CHAR_BIT * sizeof(uint32_t));
+        return _dropdownDisabledItems & (1U << index);
+    }
+
+    void drawHighlightedBackground(Ui::Window const* self, Gfx::Context* context)
+    {
+        auto [x, y] = getCellCoords(self);
+        Gfx::drawRect(context, x, y, _dropdownItemWidth, _dropdownItemHeight, (1 << 25) | OL::PaletteIndex::index_2E);
+    }
+
+    void formatString(Dropdown::Index index, OL::string_id stringId)
+    {
+        auto args = getFormatArgs(index);
         OL::StringManager::formatString(_textBuffer, stringId, &args);
+    }
+
+    void drawString(Ui::Window const* self, Gfx::Context* context, Dropdown::Index index)
+    {
+        auto colour   = getOpaqueFromPrimary(self);
+        auto stringId = _dropdownItemTextIds[index];
+
+        if (isDisabled(index))
+        {
+            ++stringId;
+            colour = OL::Colour::inset(colour);
+        }
+        else if (isHighlighted(index))
+        {
+            colour = OL::Colour::white;
+        }
+
+        formatString(index, stringId);
 
         _currentFontSpriteBase = OL::Font::medium_bold;
+        Gfx::clipString(self->width - 5, _textBuffer);
 
-        Gfx::clipString(width, _textBuffer);
-
+        auto [x, y] = getCellCoords(self);
+        x += 2;
+        y += 1;
         _currentFontSpriteBase = OL::Font::m1;
-
         Gfx::drawString(context, x, y, colour, _textBuffer);
+    }
+
+    void drawSeparator(Ui::Window const* self, Gfx::Context* context)
+    {
+        uint32_t colour1, colour2;
+
+        if (!isTranslucent(self))
+        {
+            colour1 = getShadeFromPrimary(self, 3);
+            colour2 = getShadeFromPrimary(self, 7);
+        }
+        else
+        {
+            colour1 = (_colourMap[getOpaqueFromPrimary(self)] | (1 << 25)) + 1;
+            colour2 = colour1 + 1;
+        }
+
+        auto [x, y] = getCellCoords(self);
+        x += 2;
+        y += 1 + _dropdownItemHeight / 2;
+
+        Gfx::drawRect(context, x, y,     _dropdownItemWidth - 1, 1, colour1);
+        Gfx::drawRect(context, x, y + 1, _dropdownItemWidth - 1, 1, colour2);
+    }
+
+    auto getImageId(Dropdown::Index index)
+    {
+        uint32_t id;
+        auto src = static_cast<std::byte const*>(_dropdownItemArgs[index]);
+        std::copy(src, src + sizeof id, reinterpret_cast<std::byte*>(&id));
+        return id;
+    }
+
+    void drawImage(Ui::Window const* self, Gfx::Context* context, Dropdown::Index index)
+    {
+        auto id = getImageId(index);
+
+        if (isHighlighted(index))
+        {
+            ++id;
+        }
+
+        auto [x, y] = getCellCoords(self);
+        Gfx::drawImage(context, x, y, id);
+    }
+
+    void drawContent(Ui::Window const* self, Gfx::Context* context, Dropdown::Index index)
+    {
+        if (isHighlighted(index))
+        {
+            drawHighlightedBackground(self, context);
+        }
+
+        if (isText(index))
+        {
+            drawString(self, context, index);
+        }
+        else
+        {
+            drawImage(self, context, index);
+        }
     }
 
     // 0x004CD00E
     void draw(Ui::Window* self, Gfx::Context* context)
     {
         self->draw(context);
-        _windowDropdownOnpaintCellX = 0;
-        _windowDropdownOnpaintCellY = 0;
+        resetCellPosition();
 
-        for (auto itemCount = 0; itemCount < _dropdownItemCount; itemCount++)
+        for (Dropdown::Index index; index < _dropdownItemCount; ++index)
         {
-            if (_dropdownItemFormats[itemCount] != OL::StringIds::empty)
+            if (!empty(index))
             {
-                if (itemCount == _dropdownHighlightedIndex)
-                {
-                    auto x = _windowDropdownOnpaintCellX * _dropdownItemWidth + self->x + 2;
-                    auto y = _windowDropdownOnpaintCellY * _dropdownItemHeight + self->y + 2;
-                    Gfx::drawRect(context, x, y, _dropdownItemWidth, _dropdownItemHeight, (1 << 25) | OL::PaletteIndex::index_2E);
-                }
-
-                auto args = dropdownFormatArgsToFormatArgs(itemCount);
-
-                auto dropdownItemFormat = _dropdownItemFormats[itemCount];
-
-                if (dropdownItemFormat != (OL::string_id)-2)
-                {
-                    if (dropdownItemFormat != OL::StringIds::null)
-                    {
-                        if (itemCount < 32)
-                        {
-                            if (_dropdownSelection & (1 << itemCount))
-                            {
-                                dropdownItemFormat++;
-                            }
-                        }
-
-                        auto colour = OL::Colour::opaque(self->getColour(Ui::WindowColour::primary));
-
-                        if (itemCount == _dropdownHighlightedIndex)
-                        {
-                            colour = OL::Colour::white;
-                        }
-
-                        if ((_dropdownDisabledItems & (1 << itemCount)))
-                        {
-                            if (itemCount < 32)
-                            {
-                                colour = OL::Colour::inset(OL::Colour::opaque(self->getColour(Ui::WindowColour::primary)));
-                            }
-                        }
-
-                        auto x = _windowDropdownOnpaintCellX * _dropdownItemWidth + self->x + 2;
-                        auto y = _windowDropdownOnpaintCellY * _dropdownItemHeight + self->y + 1;
-                        auto width = self->width - 5;
-                        drawString(context, dropdownItemFormat, x, y, width, colour, args);
-                    }
-                }
-
-                if (dropdownItemFormat == (OL::string_id)-2 || dropdownItemFormat == OL::StringIds::null)
-                {
-                    auto x = _windowDropdownOnpaintCellX * _dropdownItemWidth + self->x + 2;
-                    auto y = _windowDropdownOnpaintCellY * _dropdownItemHeight + self->y + 2;
-
-                    auto imageId = *(uint32_t*)&args;
-                    if (dropdownItemFormat == (OL::string_id)-2 && itemCount == _dropdownHighlightedIndex)
-                    {
-                        imageId++;
-                    }
-                    Gfx::drawImage(context, x, y, imageId);
-                }
+                drawContent(self, context, index);
             }
             else
             {
-                auto x = _windowDropdownOnpaintCellX * _dropdownItemWidth + self->x + 2;
-                auto y = _windowDropdownOnpaintCellY * _dropdownItemHeight + self->y + 1 + _dropdownItemHeight / 2;
-
-                if (!(self->getColour(Ui::WindowColour::primary) & OL::Colour::translucent_flag))
-                {
-                    Gfx::drawRect(context, x, y, _dropdownItemWidth - 1, 1, OL::Colour::getShade(self->getColour(Ui::WindowColour::primary), 3));
-                    Gfx::drawRect(context, x, y + 1, _dropdownItemWidth - 1, 1, OL::Colour::getShade(self->getColour(Ui::WindowColour::primary), 7));
-                }
-                else
-                {
-                    uint32_t colour = _byte_5045FA[OL::Colour::opaque(self->getColour(Ui::WindowColour::primary))] | (1 << 25);
-                    colour++;
-                    Gfx::drawRect(context, x, y, _dropdownItemWidth - 1, 1, colour);
-                    colour++;
-                    Gfx::drawRect(context, x, y + 1, _dropdownItemWidth - 1, 1, colour);
-                }
+                drawSeparator(self, context);
             }
 
-            _windowDropdownOnpaintCellX++;
-            if (_windowDropdownOnpaintCellX >= _dropdownColumnCount)
-            {
-                _windowDropdownOnpaintCellX = 0;
-                _windowDropdownOnpaintCellY++;
-            }
+            advanceCellPosition();
         }
     }
 
@@ -345,9 +425,9 @@ namespace
         uint16_t maxStringWidth = 0;
         for (uint8_t itemCount = 0; itemCount < count; itemCount++)
         {
-            auto args = dropdownFormatArgsToFormatArgs(itemCount);
+            auto args = getFormatArgs(itemCount);
 
-            OL::StringManager::formatString(_textBuffer, _dropdownItemFormats[itemCount], &args);
+            OL::StringManager::formatString(_textBuffer, _dropdownItemTextIds[itemCount], &args);
 
             _currentFontSpriteBase = OL::Font::medium_bold;
 
@@ -500,7 +580,7 @@ void Dropdown::show(int16_t x, int16_t y, int16_t width, int16_t height, Colour_
 
     for (auto i = 0; i < _dropdownItemCount; i++)
     {
-        _dropdownItemFormats[i] = StringIds::empty;
+        _dropdownItemTextIds[i] = StringIds::empty;
     }
 }
 
@@ -599,7 +679,7 @@ void Dropdown::showImage(int16_t x, int16_t y, int16_t width, int16_t height, in
 
     for (auto i = 0; i < _dropdownItemCount; i++)
     {
-        _dropdownItemFormats[i] = StringIds::empty;
+        _dropdownItemTextIds[i] = StringIds::empty;
     }
 }
 
@@ -845,7 +925,7 @@ void Dropdown::populateCompanySelect(Window* window, Widget* widget)
             break;
 
         companyOrdered[companyId] |= 1;
-        _dropdownItemFormats[index] = StringIds::dropdown_company_select;
+        _dropdownItemTextIds[index] = StringIds::dropdown_company_select;
         _menuOptions[index] = companyId;
 
         auto company = CompanyManager::get(companyId);
