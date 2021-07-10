@@ -237,6 +237,8 @@ namespace
     void drawHighlightedBackground(Ui::Window const* self, Gfx::Context* context)
     {
         auto [x, y] = getCellCoords(self);
+        x += 2;
+        y += 2;
         Gfx::drawRect(context, x, y, _dropdownItemWidth, _dropdownItemHeight, (1 << 25) | OL::PaletteIndex::index_2E);
     }
 
@@ -313,12 +315,14 @@ namespace
     {
         auto id = getImageId(index);
 
-        if (isHighlighted(index))
+        if (_dropdownItemFormats[index] == (OL::string_id)-2 && isHighlighted(index))
         {
             ++id;
         }
 
         auto [x, y] = getCellCoords(self);
+        x += 2;
+        y += 2;
         Gfx::drawImage(context, x, y, id);
     }
 
