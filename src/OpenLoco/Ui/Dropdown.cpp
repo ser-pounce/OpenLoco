@@ -46,7 +46,7 @@ namespace
     loco_global<uint16_t, 0x0113DC78> _word_113DC78;
     loco_global<int16_t, 0x0113D84E> _dropdownHighlightedIndex;
     loco_global<uint32_t, 0x0113DC64> _dropdownSelection;
-    loco_global<OL::string_id[max_items], 0x0113D850> _dropdownItemTextIds;
+    loco_global<OL::string_id[max_items], 0x0113D850> _dropdownItemFormats;
     loco_global<std::byte[max_items][bytes_per_item], 0x0113D8A0> _dropdownItemArgs;
     loco_global<std::byte[max_items][bytes_per_item], 0x0113D9E0> _dropdownItemArgs2;
     loco_global<uint8_t[max_items], 0x00113DB20> _menuOptions;
@@ -72,7 +72,7 @@ Dropdown::Index& Dropdown::Index::operator++()
 
 void Dropdown::add(Index index, string_id title)
 {
-    _dropdownItemTextIds[index] = title;
+    _dropdownItemFormats[index] = title;
 }
 
 void Dropdown::add(Index index, string_id title, std::initializer_list<format_arg> l)
@@ -211,15 +211,21 @@ namespace
         return index == static_cast<size_t>(Dropdown::getHighlightedItem());
     }
 
+    bool isChecked(size_t index)
+    {
+        assert(index < CHAR_BIT * sizeof(uint32_t));
+        return _dropdownSelection & (1U << index);
+    }
+
     bool empty(Dropdown::Index index)
     {
-        return _dropdownItemTextIds[index] == OL::StringIds::empty;
+        return _dropdownItemFormats[index] == OL::StringIds::empty;
     }
 
     bool isText(Dropdown::Index index)
     {
-        return _dropdownItemTextIds[index] != static_cast<OL::string_id>(-2)
-            && _dropdownItemTextIds[index] != OL::StringIds::null;
+        return _dropdownItemFormats[index] != static_cast<OL::string_id>(-2)
+            && _dropdownItemFormats[index] != OL::StringIds::null;
     }
 
     bool isDisabled(size_t index)
@@ -243,19 +249,24 @@ namespace
     void drawString(Ui::Window const* self, Gfx::Context* context, Dropdown::Index index)
     {
         auto colour   = getOpaqueFromPrimary(self);
-        auto stringId = _dropdownItemTextIds[index];
+        auto format   = _dropdownItemFormats[index];
+
+        if (format == OL::StringIds::dropdown_without_checkmark && isChecked(index))
+        {
+            format = OL::StringIds::dropdown_with_checkmark;
+        }
 
         if (isDisabled(index))
         {
-            ++stringId;
             colour = OL::Colour::inset(colour);
         }
-        else if (isHighlighted(index))
+
+        if (isHighlighted(index))
         {
             colour = OL::Colour::white;
         }
 
-        formatString(index, stringId);
+        formatString(index, format);
 
         _currentFontSpriteBase = OL::Font::medium_bold;
         Gfx::clipString(self->width - 5, _textBuffer);
@@ -427,7 +438,7 @@ namespace
         {
             auto args = getFormatArgs(itemCount);
 
-            OL::StringManager::formatString(_textBuffer, _dropdownItemTextIds[itemCount], &args);
+            OL::StringManager::formatString(_textBuffer, _dropdownItemFormats[itemCount], &args);
 
             _currentFontSpriteBase = OL::Font::medium_bold;
 
@@ -580,7 +591,7 @@ void Dropdown::show(int16_t x, int16_t y, int16_t width, int16_t height, Colour_
 
     for (auto i = 0; i < _dropdownItemCount; i++)
     {
-        _dropdownItemTextIds[i] = StringIds::empty;
+        _dropdownItemFormats[i] = StringIds::empty;
     }
 }
 
@@ -679,7 +690,7 @@ void Dropdown::showImage(int16_t x, int16_t y, int16_t width, int16_t height, in
 
     for (auto i = 0; i < _dropdownItemCount; i++)
     {
-        _dropdownItemTextIds[i] = StringIds::empty;
+        _dropdownItemFormats[i] = StringIds::empty;
     }
 }
 
@@ -925,7 +936,7 @@ void Dropdown::populateCompanySelect(Window* window, Widget* widget)
             break;
 
         companyOrdered[companyId] |= 1;
-        _dropdownItemTextIds[index] = StringIds::dropdown_company_select;
+        _dropdownItemFormats[index] = StringIds::dropdown_company_select;
         _menuOptions[index] = companyId;
 
         auto company = CompanyManager::get(companyId);
