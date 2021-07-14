@@ -14,6 +14,7 @@
 #include <cassert>
 #include <cstdarg>
 #include <limits>
+#include <optional>
 
 using namespace OpenLoco::Interop;
 
@@ -27,8 +28,8 @@ namespace
     constexpr uint8_t bytes_per_item = 8;
     constexpr uint8_t max_items      = 40;
 
-    loco_global<uint8_t[31], 0x005045FA> _colourMap;
-    loco_global<uint8_t[31], 0x00504619> _byte_504619;
+    loco_global<uint8_t[31], 0x005045FA> _colourMap1;
+    loco_global<uint8_t[31], 0x00504619> _colourMap2;
     loco_global<std::uint8_t[33], 0x005046FA> _appropriateImageDropdownItemsPerRow;
     loco_global<Ui::WindowType, 0x0052336F> _pressedWindowType;
     loco_global<Ui::WindowNumber_t, 0x00523370> _pressedWindowNumber;
@@ -70,9 +71,9 @@ Dropdown::Index& Dropdown::Index::operator++()
     return *this;
 }
 
-void Dropdown::add(Index index, string_id title)
+void Dropdown::add(Index index, string_id format)
 {
-    _dropdownItemFormats[index] = title;
+    _dropdownItemFormats[index] = format;
 }
 
 void Dropdown::add(Index index, string_id title, std::initializer_list<format_arg> l)
@@ -217,21 +218,34 @@ namespace
         return index == static_cast<size_t>(Dropdown::getHighlightedItem());
     }
 
-    bool isChecked(size_t index)
+    auto getItemFormat(Dropdown::Index index)
+    {
+        return _dropdownItemFormats[index];
+    }
+
+    bool isSelectable(size_t index)
+    {
+        auto format = getItemFormat(index);
+        return format == OL::StringIds::carrying_cargoid_sprite
+            || format == OL::StringIds::dropdown_stringid
+            || format == OL::StringIds::dropdown_without_checkmark;
+    }
+
+    bool isSelected(size_t index)
     {
         assert(index < CHAR_BIT * sizeof(uint32_t));
-        return _dropdownSelection & (1U << index);
+        return isSelectable(index) && _dropdownSelection & (1U << index);
     }
 
     bool empty(Dropdown::Index index)
     {
-        return _dropdownItemFormats[index] == OL::StringIds::empty;
+        return getItemFormat(index) == OL::StringIds::empty;
     }
 
     bool isText(Dropdown::Index index)
     {
-        return _dropdownItemFormats[index] != static_cast<OL::string_id>(-2)
-            && _dropdownItemFormats[index] != OL::StringIds::null;
+        return getItemFormat(index) != static_cast<OL::string_id>(-2)
+            && getItemFormat(index) != OL::StringIds::null;
     }
 
     void enableAllItems()
@@ -250,29 +264,38 @@ namespace
         _dropdownSelection = 0;
     }
 
+    uint32_t makeTransparent(uint32_t colour)
+    {
+        return (1 << 25) | colour;
+    }
+
     void drawHighlightedBackground(Ui::Window const* self, Gfx::Context* context)
     {
         auto [x, y] = getCellCoords(self);
         x += 2;
         y += 2;
-        Gfx::drawRect(context, x, y, _dropdownItemWidth, _dropdownItemHeight, (1 << 25) | OL::PaletteIndex::index_2E);
+        Gfx::drawRect(context, x, y, _dropdownItemWidth, _dropdownItemHeight, makeTransparent(OL::PaletteIndex::index_2E));
     }
 
-    void formatString(Dropdown::Index index, OL::string_id stringId)
+    void formatString(Dropdown::Index index)
     {
         auto args = getFormatArgs(index);
-        OL::StringManager::formatString(_textBuffer, stringId, &args);
+        OL::StringManager::formatString(_textBuffer, getItemFormat(index), &args);
+    }
+
+    void addCheckmarkIfSelected(Dropdown::Index index)
+    {
+        if (isSelected(index))
+        {
+            Dropdown::add(index, getItemFormat(index) + 1);
+        }
     }
 
     void drawString(Ui::Window const* self, Gfx::Context* context, Dropdown::Index index)
     {
-        auto colour   = getOpaqueFromPrimary(self);
-        auto format   = _dropdownItemFormats[index];
+        auto colour = getOpaqueFromPrimary(self);
 
-        if (format == OL::StringIds::dropdown_without_checkmark && isChecked(index))
-        {
-            format = OL::StringIds::dropdown_with_checkmark;
-        }
+        addCheckmarkIfSelected(index);
 
         if (isDisabled(index))
         {
@@ -284,7 +307,7 @@ namespace
             colour = OL::Colour::white;
         }
 
-        formatString(index, format);
+        formatString(index);
 
         _currentFontSpriteBase = OL::Font::medium_bold;
         Gfx::clipString(self->width - 5, _textBuffer);
@@ -300,15 +323,15 @@ namespace
     {
         uint32_t colour1, colour2;
 
-        if (!isTranslucent(self))
+        if (isTranslucent(self))
         {
-            colour1 = getShadeFromPrimary(self, 3);
-            colour2 = getShadeFromPrimary(self, 7);
+            colour1 = makeTransparent(_colourMap1[getOpaqueFromPrimary(self)]) + 1;
+            colour2 = colour1 + 1;
         }
         else
         {
-            colour1 = (_colourMap[getOpaqueFromPrimary(self)] | (1 << 25)) + 1;
-            colour2 = colour1 + 1;
+            colour1 = getShadeFromPrimary(self, 3);
+            colour2 = getShadeFromPrimary(self, 7);
         }
 
         auto [x, y] = getCellCoords(self);
@@ -331,7 +354,7 @@ namespace
     {
         auto id = getImageId(index);
 
-        if (_dropdownItemFormats[index] == (OL::string_id)-2 && isHighlighted(index))
+        if (getItemFormat(index) == static_cast<OL::string_id>(-2) && isHighlighted(index))
         {
             ++id;
         }
@@ -424,9 +447,9 @@ namespace
     // 0x004CC807 based on
     void setColourAndInputFlags(OL::Colour_t& colour, uint8_t& flags)
     {
-        if (colour & OL::Colour::translucent_flag)
+        if (isTranslucent(colour))
         {
-            colour = _byte_504619[OL::Colour::opaque(colour)];
+            colour = _colourMap2[OL::Colour::opaque(colour)];
             colour = OL::Colour::translucent(colour);
         }
 
@@ -445,94 +468,73 @@ namespace
     uint16_t getStringWidth(char* buffer)
     {
         registers regs;
-        regs.esi = (int32_t)buffer;
+        regs.esi = reinterpret_cast<decltype(regs.esi)>(buffer);
         call(0x004955BC, regs);
 
         return regs.cx;
     }
 
-    // 0x004CCAB2
-    void showTextImpl(int16_t x, int16_t y, int16_t width, int16_t height, uint8_t itemHeight, OL::Colour_t colour, size_t count, uint8_t flags)
+    auto maxItemWidth(size_t count)
+    {
+        uint16_t maxStringWidth = 0;
+
+        for (uint8_t index = 0; index < count; index++)
+        {
+            formatString(index);
+            _currentFontSpriteBase = OL::Font::medium_bold;
+            maxStringWidth = std::max(maxStringWidth, getStringWidth(_textBuffer));
+        }
+
+        return maxStringWidth + 3;
+    }
+
+    void resetLayout(size_t count, std::optional<uint8_t> itemHeight)
     {
         _dropdownColumnCount = 1;
-        _dropdownItemWidth = 0;
-        _dropdownItemHeight = 10;
-
-        if (flags & (1 << 6))
-        {
-            _dropdownItemHeight = itemHeight;
-        }
-
-        flags &= ~(1 << 6);
-
-        uint16_t maxStringWidth = 0;
-        for (uint8_t itemCount = 0; itemCount < count; itemCount++)
-        {
-            auto args = getFormatArgs(itemCount);
-
-            OL::StringManager::formatString(_textBuffer, _dropdownItemFormats[itemCount], &args);
-
-            _currentFontSpriteBase = OL::Font::medium_bold;
-
-            auto stringWidth = getStringWidth(_textBuffer);
-
-            maxStringWidth = std::max(maxStringWidth, stringWidth);
-        }
-
-        maxStringWidth += 3;
-        _dropdownItemWidth = maxStringWidth;
         _dropdownItemCount = static_cast<uint16_t>(count);
         _dropdownRowCount = static_cast<uint32_t>(count);
-        uint16_t dropdownHeight = _dropdownItemHeight * static_cast<uint16_t>(count) + 3;
-        widgets[0].bottom = dropdownHeight;
-        dropdownHeight++;
+        _dropdownItemWidth = maxItemWidth(count);
+        _dropdownItemHeight  = itemHeight.value_or(10);
 
-        Gfx::ui_size_t size = { static_cast<uint16_t>(_dropdownItemWidth), dropdownHeight };
-        Gfx::point_t origin = { x, y };
-        origin.y += height;
+        widgets[0].right = _dropdownItemWidth + 3;
+        widgets[0].bottom = _dropdownItemHeight * static_cast<uint16_t>(count) + 3;
+    }
 
-        if ((size.height + origin.y) > Ui::height() || origin.y < 0)
+    auto overrideItemHeight(uint8_t flags, uint8_t height)
+    {
+        return flags & (1 << 6) ? std::optional{ height } : std::nullopt;
+    }
+
+    bool offScreenY(Gfx::point_t origin, Gfx::ui_size_t size)
+    {
+        return origin.y < 0 || (origin.y + size.height) > Ui::height();
+    }
+
+
+    // 0x004CCAB2
+    void showDropdown(Gfx::point_t widgetOrigin, Gfx::ui_size_t widgetSize, OL::Colour_t colour, size_t count, std::optional<uint8_t> itemHeight)
+    {
+        resetLayout(count, itemHeight);
+
+        Gfx::ui_size_t size = { static_cast<uint16_t>(widgets[0].right + 1), static_cast<uint16_t>(widgets[0].bottom + 1) };
+        Gfx::point_t origin = { widgetOrigin.x, widgetOrigin.y + widgetSize.height };
+
+        if (origin.y + size.height > Ui::height())
         {
-            origin.y -= (height + size.height);
-            auto dropdownBottom = origin.y;
+            origin.y = widgetOrigin.y - size.height;
+        }
 
-            if (origin.y >= 0)
+        if (origin.y < 0)
+        {
+            origin = { widgetOrigin.x + widgetSize.width, 0 };
+
+            if (origin.x + size.width > Ui::width())
             {
-                dropdownBottom = origin.y + size.height;
-            }
-
-            if (origin.y < 0 || dropdownBottom > Ui::height())
-            {
-                origin.x += width;
-                origin.x += maxStringWidth;
-
-                if (origin.x > Ui::width())
-                {
-                    origin.x = x;
-                    origin.x -= (maxStringWidth + 4);
-                }
-
-                origin.y = 0;
+                origin.x = widgetOrigin.x - size.width;
             }
         }
 
-        size.width = maxStringWidth + 3;
-        widgets[0].right = size.width;
-        size.width++;
-
-        if (origin.x < 0)
-        {
-            origin.x = 0;
-        }
-
-        origin.x += size.width;
-
-        if (origin.x > Ui::width())
-        {
-            origin.x = Ui::width();
-        }
-
-        origin.x -= size.width;
+        origin.x = std::clamp<int16_t>(origin.x, 0, Ui::width() - size.width);
 
         open(origin, size, colour);
     }
@@ -753,12 +755,12 @@ void Dropdown::showBelow(Window* window, WidgetIndex_t widgetIndex, size_t count
     auto colour = window->getColour(widget.windowColour);
     colour = Colour::translucent(colour);
 
-    auto x = widget.left + window->x;
-    auto y = widget.top + window->y;
+    int16_t x = widget.left + window->x;
+    int16_t y = widget.top + window->y;
 
     if (colour & Colour::translucent_flag)
     {
-        colour = _byte_504619[Colour::opaque(colour)];
+        colour = _colourMap2[Colour::opaque(colour)];
         colour = Colour::translucent(colour);
     }
 
@@ -770,9 +772,7 @@ void Dropdown::showBelow(Window* window, WidgetIndex_t widgetIndex, size_t count
         Input::setFlag(Input::Flags::flag1);
     }
 
-    flags &= ~(1 << 7);
-
-    showTextImpl(x, y, widget.width(), widget.height(), itemHeight, colour, count, flags);
+    showDropdown({ x, y }, { widget.width(), widget.height() }, colour, count, overrideItemHeight(flags, itemHeight));
 }
 
 // 0x004CC989
@@ -793,7 +793,7 @@ void Dropdown::showBelow(Window* window, WidgetIndex_t widgetIndex, size_t count
     * flags @<bh>
     * Custom Dropdown height if flags & (1<<6) is true
     */
-void Dropdown::showText(int16_t x, int16_t y, int16_t width, int16_t height, uint8_t itemHeight, Colour_t colour, size_t count, uint8_t flags)
+void Dropdown::showText(int16_t x, int16_t y, uint16_t width, uint16_t height, uint8_t itemHeight, Colour_t colour, size_t count, uint8_t flags)
 {
     assert(count < std::numeric_limits<uint8_t>::max());
 
@@ -802,7 +802,7 @@ void Dropdown::showText(int16_t x, int16_t y, int16_t width, int16_t height, uin
     WindowManager::close(WindowType::dropdown, 0);
     _word_113DC78 = 0;
 
-    showTextImpl(x, y, width, height, itemHeight, colour, count, flags);
+    showDropdown({ x, y }, { width, height }, colour, count, overrideItemHeight(flags, itemHeight));
 }
 
 // 0x004CCA6D
