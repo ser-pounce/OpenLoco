@@ -574,6 +574,15 @@ namespace OpenLoco::Ui::Windows::TownList
         return window;
     }
 
+    // 0x00496B50
+    void reset()
+    {
+        _lastSelectedBuilding = 0xFF;
+        _lastSelectedMiscBuilding = 0xFF;
+        _buildingRotation = 2;
+        _townSize = 3;
+    }
+
     namespace BuildTowns
     {
         static const Gfx::ui_size_t windowSize = { 220, 87 };
@@ -595,6 +604,17 @@ namespace OpenLoco::Ui::Windows::TownList
 
         static WindowEventList events;
 
+        constexpr string_id townSizeNames[9] = {
+            StringIds::town_size_1,
+            StringIds::town_size_2,
+            StringIds::town_size_3,
+            StringIds::town_size_4,
+            StringIds::town_size_5,
+            StringIds::town_size_6,
+            StringIds::town_size_7,
+            StringIds::town_size_8,
+        };
+
         // 0x0049A59A
         static void prepareDraw(Ui::Window* self)
         {
@@ -602,19 +622,7 @@ namespace OpenLoco::Ui::Windows::TownList
 
             Common::repositionTabs(self);
 
-            static string_id townSizeNames[9] = {
-                StringIds::tooltip_select_town_size,
-                StringIds::town_size_1,
-                StringIds::town_size_2,
-                StringIds::town_size_3,
-                StringIds::town_size_4,
-                StringIds::town_size_5,
-                StringIds::town_size_6,
-                StringIds::town_size_7,
-                StringIds::town_size_8,
-            };
-
-            self->widgets[widx::current_size].text = townSizeNames[_townSize];
+            self->widgets[widx::current_size].text = townSizeNames[_townSize - 1];
         }
 
         // 0x0049A627
@@ -702,11 +710,16 @@ namespace OpenLoco::Ui::Windows::TownList
         // 0x0049A69E
         static void populateTownSizeSelect(Window* self, Widget* widget)
         {
-            registers regs;
-            regs.edi = (int32_t)widget;
-            regs.esi = (int32_t)self;
+            auto& currentSizeWidget = self->widgets[widx::current_size];
 
-            call(0x0049A69E, regs);
+            Dropdown::show(self->x + currentSizeWidget.left, self->y + currentSizeWidget.top, currentSizeWidget.width() - 2, currentSizeWidget.height(), self->getColour(WindowColour::secondary), 8, (1 << 7));
+
+            for (size_t i = 0; i < std::size(townSizeNames); ++i)
+            {
+                Dropdown::add(i, townSizeNames[i]);
+            }
+
+            Dropdown::setHighlightedItem(_townSize - 1);
         }
 
         // 0x0049A690
