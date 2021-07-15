@@ -59,7 +59,7 @@ Dropdown::Index::Index(size_t index)
     assert(_index < max_items);
 }
 
-Dropdown::Index::operator size_t() const
+Dropdown::Index::operator uint8_t() const
 {
     return _index;
 }
@@ -221,6 +221,16 @@ namespace
     auto getItemFormat(Dropdown::Index index)
     {
         return _dropdownItemFormats[index];
+    }
+
+    auto getItemCount()
+    {
+        return _dropdownItemCount;
+    }
+
+    auto setItemCount(Dropdown::Index index)
+    {
+        _dropdownItemCount = index;
     }
 
     bool isSelectable(size_t index)
@@ -491,7 +501,7 @@ namespace
     void resetLayout(size_t count, std::optional<uint8_t> itemHeight)
     {
         _dropdownColumnCount = 1;
-        _dropdownItemCount = static_cast<uint16_t>(count);
+        setItemCount(count);
         _dropdownRowCount = static_cast<uint32_t>(count);
         _dropdownItemWidth = maxItemWidth(count);
         _dropdownItemHeight  = itemHeight.value_or(10);
@@ -555,8 +565,6 @@ namespace
     */
 void Dropdown::show(int16_t x, int16_t y, int16_t width, int16_t height, Colour_t colour, size_t count, uint8_t itemHeight, uint8_t flags)
 {
-    assert(count < std::numeric_limits<uint8_t>::max());
-
     setColourAndInputFlags(colour, flags);
 
     WindowManager::close(WindowType::dropdown, 0);
