@@ -455,7 +455,7 @@ namespace
     }
 
     // 0x004CC807 based on
-    void setColourAndInputFlags(OL::Colour_t& colour, uint8_t& flags)
+    void setColourAndInputFlags(OL::Colour_t& colour, uint8_t flags)
     {
         if (isTranslucent(colour))
         {
@@ -470,8 +470,6 @@ namespace
         {
             OL::Input::setFlag(OL::Input::Flags::flag1);
         }
-
-        flags &= ~(1 << 7);
     }
 
     // 0x004955BC
@@ -498,13 +496,13 @@ namespace
         return maxStringWidth + 3;
     }
 
-    void resetLayout(size_t count, std::optional<uint8_t> itemHeight)
+    void setLayout(size_t count, uint16_t width, std::optional<uint8_t> height)
     {
         _dropdownColumnCount = 1;
         setItemCount(count);
         _dropdownRowCount = static_cast<uint32_t>(count);
-        _dropdownItemWidth = maxItemWidth(count);
-        _dropdownItemHeight  = itemHeight.value_or(10);
+        _dropdownItemWidth = width;
+        _dropdownItemHeight = height.value_or(10);
 
         widgets[0].right = _dropdownItemWidth + 3;
         widgets[0].bottom = _dropdownItemHeight * static_cast<uint16_t>(count) + 3;
@@ -520,15 +518,8 @@ namespace
         return origin.y < 0 || (origin.y + size.height) > Ui::height();
     }
 
-
-    // 0x004CCAB2
-    void showDropdown(Gfx::point_t parentOrigin, Gfx::ui_size_t parentSize, OL::Colour_t colour, size_t count, std::optional<uint8_t> itemHeight)
+    void ensureOnScreen(Gfx::point_t& origin, Gfx::ui_size_t& size, Gfx::point_t parentOrigin, Gfx::ui_size_t parentSize)
     {
-        resetLayout(count, itemHeight);
-
-        Gfx::ui_size_t size = { widgets[0].width(), widgets[0].height() };
-        Gfx::point_t origin = { parentOrigin.x, parentOrigin.y + parentSize.height };
-
         if (origin.y + size.height > Ui::height())
         {
             origin.y = parentOrigin.y - size.height;
@@ -545,11 +536,33 @@ namespace
         }
 
         origin.x = std::clamp<int16_t>(origin.x, 0, std::max(0, Ui::width() - size.width));
+    }
+
+
+    // 0x004CCAB2
+    void showDropdown(Gfx::point_t parentOrigin, Gfx::ui_size_t parentSize, OL::Colour_t colour, size_t count, std::optional<uint8_t> itemHeight)
+    {
+        setLayout(count, maxItemWidth(count), itemHeight);
+
+        Gfx::ui_size_t size = { widgets[0].width(), widgets[0].height() };
+        Gfx::point_t origin = { parentOrigin.x, parentOrigin.y + parentSize.height };
+
+        ensureOnScreen(origin, size, parentOrigin, parentSize);
 
         open(origin, size, colour);
     }
 }
 
+namespace
+{
+    void invalidateItems()
+    {
+        for (auto i = 0; i < getItemCount(); i++)
+        {
+            Dropdown::add(i, OL::StringIds::empty);
+        }
+    }
+}
 /**
     * 0x004CC807
     *
@@ -565,76 +578,17 @@ namespace
     */
 void Dropdown::show(int16_t x, int16_t y, int16_t width, int16_t height, Colour_t colour, size_t count, uint8_t itemHeight, uint8_t flags)
 {
-    setColourAndInputFlags(colour, flags);
-
     WindowManager::close(WindowType::dropdown, 0);
+    setColourAndInputFlags(colour, flags);
+    invalidateItems();
     _word_113DC78 = 0;
 
-    _dropdownColumnCount = 1;
-    _dropdownItemWidth = 0;
-    _dropdownItemWidth = width;
-    _dropdownItemHeight = 10;
+    setLayout(count, width, overrideItemHeight(flags, itemHeight));
+    Gfx::ui_size_t size = { static_cast<uint16_t>(width), static_cast<uint16_t>(count * _dropdownItemHeight + 3) };
+    Gfx::point_t origin = { x, y + height };
 
-    if (flags & (1 << 6))
-    {
-        _dropdownItemHeight = itemHeight;
-    }
-
-    flags &= ~(1 << 6);
-
-    _dropdownItemCount = static_cast<uint16_t>(count);
-    _dropdownRowCount = 0;
-    _dropdownRowCount = count;
-
-    int16_t dropdownHeight = (static_cast<int16_t>(count) * _dropdownItemHeight) + 3;
-    widgets[0].bottom = dropdownHeight;
-    dropdownHeight++;
-    Gfx::ui_size_t size = { static_cast<uint16_t>(width), static_cast<uint16_t>(height) };
-    Gfx::point_t origin = { x, y };
-    origin.y += height;
-
-    size.height = dropdownHeight;
-    if ((size.height + origin.y) > Ui::height() || origin.y < 0)
-    {
-        origin.y -= (height + dropdownHeight);
-        auto dropdownBottom = origin.y;
-
-        if (origin.y >= 0)
-        {
-            dropdownBottom = origin.y + dropdownHeight;
-        }
-
-        if (origin.y < 0 || dropdownBottom > Ui::height())
-        {
-            origin.x += width + 3;
-            origin.y = 0;
-        }
-    }
-
-    size.width = width + 3;
-    widgets[0].right = size.width;
-    size.width++;
-
-    if (origin.x < 0)
-    {
-        origin.x = 0;
-    }
-
-    origin.x += size.width;
-
-    if (origin.x > Ui::width())
-    {
-        origin.x = Ui::width();
-    }
-
-    origin.x -= size.width;
-
+    ensureOnScreen(origin, size, { x, y }, { static_cast<uint16_t>(width), static_cast<uint16_t>(height) });
     open(origin, size, colour);
-
-    for (auto i = 0; i < _dropdownItemCount; i++)
-    {
-        _dropdownItemFormats[i] = StringIds::empty;
-    }
 }
 
 /**
