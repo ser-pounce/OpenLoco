@@ -512,29 +512,29 @@ namespace
 
 
     // 0x004CCAB2
-    void showDropdown(Gfx::point_t widgetOrigin, Gfx::ui_size_t widgetSize, OL::Colour_t colour, size_t count, std::optional<uint8_t> itemHeight)
+    void showDropdown(Gfx::point_t parentOrigin, Gfx::ui_size_t parentSize, OL::Colour_t colour, size_t count, std::optional<uint8_t> itemHeight)
     {
         resetLayout(count, itemHeight);
 
-        Gfx::ui_size_t size = { static_cast<uint16_t>(widgets[0].right + 1), static_cast<uint16_t>(widgets[0].bottom + 1) };
-        Gfx::point_t origin = { widgetOrigin.x, widgetOrigin.y + widgetSize.height };
+        Gfx::ui_size_t size = { widgets[0].width(), widgets[0].height() };
+        Gfx::point_t origin = { parentOrigin.x, parentOrigin.y + parentSize.height };
 
         if (origin.y + size.height > Ui::height())
         {
-            origin.y = widgetOrigin.y - size.height;
+            origin.y = parentOrigin.y - size.height;
         }
 
         if (origin.y < 0)
         {
-            origin = { widgetOrigin.x + widgetSize.width, 0 };
+            origin = { parentOrigin.x + parentSize.width, 0 };
 
             if (origin.x + size.width > Ui::width())
             {
-                origin.x = widgetOrigin.x - size.width;
+                origin.x = parentOrigin.x - size.width;
             }
         }
 
-        origin.x = std::clamp<int16_t>(origin.x, 0, Ui::width() - size.width);
+        origin.x = std::clamp<int16_t>(origin.x, 0, std::max(0, Ui::width() - size.width));
 
         open(origin, size, colour);
     }
