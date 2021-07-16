@@ -496,16 +496,16 @@ namespace
         return maxStringWidth + 3;
     }
 
-    void setLayout(size_t count, uint16_t width, std::optional<uint8_t> height)
+    void setLayout(size_t count, uint32_t rows, uint8_t columns, uint16_t width, std::optional<uint8_t> height)
     {
-        _dropdownColumnCount = 1;
+        _dropdownColumnCount = columns;
         setItemCount(count);
-        _dropdownRowCount = static_cast<uint32_t>(count);
+        _dropdownRowCount = rows;
         _dropdownItemWidth = width;
         _dropdownItemHeight = height.value_or(10);
 
-        widgets[0].right = _dropdownItemWidth + 3;
-        widgets[0].bottom = _dropdownItemHeight * static_cast<uint16_t>(count) + 3;
+        widgets[0].right = _dropdownItemWidth * _dropdownColumnCount + 3;
+        widgets[0].bottom = _dropdownItemHeight * _dropdownRowCount + 3;
     }
 
     auto overrideItemHeight(uint8_t flags, uint8_t height)
@@ -542,7 +542,7 @@ namespace
     // 0x004CCAB2
     void showDropdown(Gfx::point_t parentOrigin, Gfx::ui_size_t parentSize, OL::Colour_t colour, size_t count, std::optional<uint8_t> itemHeight)
     {
-        setLayout(count, maxItemWidth(count), itemHeight);
+        setLayout(count, count, 1, maxItemWidth(count), itemHeight);
 
         Gfx::ui_size_t size = { widgets[0].width(), widgets[0].height() };
         Gfx::point_t origin = { parentOrigin.x, parentOrigin.y + parentSize.height };
@@ -583,7 +583,7 @@ void Dropdown::show(int16_t x, int16_t y, int16_t width, int16_t height, Colour_
     invalidateItems();
     _word_113DC78 = 0;
 
-    setLayout(count, width, overrideItemHeight(flags, itemHeight));
+    setLayout(count, count, 1, width, overrideItemHeight(flags, itemHeight));
     Gfx::ui_size_t size = { static_cast<uint16_t>(width), static_cast<uint16_t>(count * _dropdownItemHeight + 3) };
     Gfx::point_t origin = { x, y + height };
 
@@ -622,79 +622,40 @@ void Dropdown::show(int16_t x, int16_t y, int16_t width, int16_t height, Colour_
     */
 void Dropdown::showImage(int16_t x, int16_t y, int16_t width, int16_t height, int16_t heightOffset, Colour_t colour, uint8_t columnCount, uint8_t count, uint8_t flags)
 {
-    assert(count < std::numeric_limits<uint8_t>::max());
     assert(count < std::size(_appropriateImageDropdownItemsPerRow));
 
+    WindowManager::close(WindowType::dropdown, 0);
     setColourAndInputFlags(colour, flags);
-
-    WindowManager::close(WindowType::dropdown, 0);
+    invalidateItems();
     _word_113DC78 = 0;
 
-    WindowManager::close(WindowType::dropdown, 0);
-    _word_113DC78 = 0;
-    _dropdownItemHeight = height;
-    _dropdownItemWidth = width;
-    _dropdownItemCount = count;
-    _dropdownColumnCount = columnCount;
+    auto rows = count / columnCount + ((count % columnCount) ? 1 : 0);
+    setLayout(count, rows, columnCount, width, height);
 
-    _dropdownRowCount = _dropdownItemCount / _dropdownColumnCount + ((_dropdownItemCount % _dropdownColumnCount) ? 1 : 0);
-    uint16_t dropdownWidth = _dropdownItemWidth * _dropdownColumnCount + 3;
-    widgets[0].right = dropdownWidth;
-    uint16_t dropdownHeight = _dropdownItemHeight * _dropdownRowCount + 3;
-    widgets[0].bottom = dropdownHeight;
-    dropdownHeight++;
 
-    Gfx::ui_size_t size = { dropdownWidth, dropdownHeight };
-    Gfx::point_t origin = { x, y };
-    origin.y += heightOffset;
+    Gfx::ui_size_t size{ static_cast<uint16_t>(widgets[0].width() + 1),
+                         static_cast<uint16_t>(widgets[0].height() + 1) };
+    Gfx::point_t origin{ x, y + heightOffset };
 
-    size.height = dropdownHeight;
-    if ((size.height + origin.y) > Ui::height() || origin.y < 0)
+    if (origin.y + size.height > Ui::height())
     {
-        origin.y -= (heightOffset + dropdownHeight);
-        auto dropdownBottom = origin.y;
-
-        if (origin.y >= 0)
-        {
-            dropdownBottom = origin.y + dropdownHeight;
-        }
-
-        if (origin.y < 0 || dropdownBottom > Ui::height())
-        {
-            origin.x += widgets[0].right;
-            origin.y = 0;
-        }
+        origin.y = y - height - size.height;
     }
 
-    size.width = widgets[0].right + 1;
-
-    if (origin.x < 0)
+    if (origin.y < 0)
     {
-        origin.x = 0;
+        origin = { x + widgets[0].width(), 0 };
     }
 
-    origin.x += size.width;
-
-    if (origin.x > Ui::width())
-    {
-        origin.x = Ui::width();
-    }
-
-    origin.x -= size.width;
+    origin.x = std::clamp<int16_t>(origin.x, 0, std::max(0, Ui::width() - size.width));
+    
 
     open(origin, size, colour);
-
-    for (auto i = 0; i < _dropdownItemCount; i++)
-    {
-        _dropdownItemFormats[i] = StringIds::empty;
-    }
 }
 
 // 0x004CC989
 void Dropdown::showBelow(Window* window, WidgetIndex_t widgetIndex, size_t count, int8_t itemHeight, uint8_t flags)
 {
-    assert(count < std::numeric_limits<uint8_t>::max());
-
     WindowManager::close(WindowType::dropdown, 0);
     _word_113DC78 = 0;
 
@@ -720,10 +681,9 @@ void Dropdown::showBelow(Window* window, WidgetIndex_t widgetIndex, size_t count
     int16_t x = widget.left + window->x;
     int16_t y = widget.top + window->y;
 
-    if (colour & Colour::translucent_flag)
+    if (isTranslucent(colour))
     {
-        colour = _colourMap2[Colour::opaque(colour)];
-        colour = Colour::translucent(colour);
+        colour = Colour::translucent(_colourMap2[Colour::opaque(colour)]);
     }
 
     Input::resetFlag(Input::Flags::flag1);
