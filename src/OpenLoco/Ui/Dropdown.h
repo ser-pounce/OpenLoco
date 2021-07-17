@@ -15,7 +15,7 @@ namespace OpenLoco::Ui::Dropdown
     class Index
     {
     public:
-        Index(size_t index = 0);
+        Index(size_t index);
         operator uint8_t() const;
         Index& operator++();
 

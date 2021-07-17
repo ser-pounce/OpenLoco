@@ -53,7 +53,7 @@ namespace
     loco_global<uint8_t[max_items], 0x00113DB20> _menuOptions;
 } // namespace
 
-Dropdown::Index::Index(size_t index)
+Dropdown::Index::Index(size_t index = 0)
     : _index{ static_cast<uint8_t>(index) }
 {
     assert(_index < max_items);
