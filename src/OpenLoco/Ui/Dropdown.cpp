@@ -544,7 +544,7 @@ namespace
     {
         setLayout(count, count, 1, maxItemWidth(count), itemHeight);
 
-        Gfx::ui_size_t size = { widgets[0].width(), widgets[0].height() };
+        Gfx::ui_size_t size = { static_cast<uint16_t>(widgets[0].width() + 1), static_cast<uint16_t>(widgets[0].height() + 1) };
         Gfx::point_t origin = { parentOrigin.x, parentOrigin.y + parentSize.height };
 
         ensureOnScreen(origin, size, parentOrigin, parentSize);
@@ -745,8 +745,6 @@ void Dropdown::showText(int16_t x, int16_t y, int16_t width, int16_t height, Col
     */
 void Dropdown::showText2(int16_t x, int16_t y, int16_t width, int16_t height, uint8_t itemHeight, Colour_t colour, size_t count, uint8_t flags)
 {
-    assert(count < std::numeric_limits<uint8_t>::max());
-
     setColourAndInputFlags(colour, flags);
 
     WindowManager::close(WindowType::dropdown, 0);
